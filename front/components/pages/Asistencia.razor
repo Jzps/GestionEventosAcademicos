@@ -1,0 +1,135 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/responsable/eventos/{Id:long}/asistencia"
+@attribute [Authorize(Roles = "Responsable")]
+@inject ServicioEventos Catalogo
+@inject ServicioParticipacion Participacion
+
+<PageTitle>Registro de asistencia</PageTitle>
+
+<section class="contenedor seccion">
+    <nav class="migas" aria-label="Ruta de navegación">
+        <a href="/responsable/eventos">Mis eventos</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Asistencia</span>
+    </nav>
+
+    <div class="seccion-encabezado">
+        <div>
+            <h1>Registro de asistencia</h1>
+            @if (Evento is not null)
+            {
+                <p class="texto-suave">@Evento.Nombre · @Evento.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm")</p>
+            }
+        </div>
+        <a class="boton boton-contorno" href="@($"/responsable/eventos/{Id}/participantes")">Ir a participantes</a>
+    </div>
+
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    @if (Cargando)
+    {
+        <Cargando Texto="Consultando el registro de asistencia…" />
+    }
+    else if (Registros.Count == 0)
+    {
+        <EstadoVacio Titulo="Todavía no hay registros de asistencia"
+                     Descripcion="Registre la asistencia desde la pantalla de participantes del evento." />
+    }
+    else
+    {
+        <div class="resumen-asistencia">
+            <div class="indicador">
+                <span class="indicador-valor">@Registros.Count</span>
+                <span class="indicador-etiqueta">Registros</span>
+            </div>
+            <div class="indicador">
+                <span class="indicador-valor">@Asistieron</span>
+                <span class="indicador-etiqueta">Asistieron</span>
+            </div>
+            <div class="indicador">
+                <span class="indicador-valor">@(Registros.Count - Asistieron)</span>
+                <span class="indicador-etiqueta">No asistencia</span>
+            </div>
+        </div>
+
+        <div class="tabla-contenedor">
+            <table class="tabla">
+                <caption class="solo-lectores">Registros de asistencia del evento</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Estudiante</th>
+                        <th scope="col">Código</th>
+                        <th scope="col">Asistencia</th>
+                        <th scope="col">Fecha del registro</th>
+                        <th scope="col">Observación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var registro in Registros)
+                    {
+                        <tr>
+                            <td data-label="Estudiante">@registro.NombreCompleto</td>
+                            <td data-label="Código">@registro.Codigo</td>
+                            <td data-label="Asistencia">
+                                <span class="etiqueta etiqueta-@(registro.Asistio ? "activa" : "cancelada")">
+                                    @(registro.Asistio ? "Asistió" : "No asistió")
+                                </span>
+                            </td>
+                            <td data-label="Fecha del registro">@registro.FechaHoraRegistro.ToString("dd/MM/yyyy · HH:mm")</td>
+                            <td data-label="Observación">@(string.IsNullOrWhiteSpace(registro.Observacion) ? "—" : registro.Observacion)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private List<AsistenciaDto> Registros = new();
+    private EventoDetalleDto? Evento;
+    private bool Cargando = true;
+    private string MensajeError = string.Empty;
+
+    private int Asistieron => Registros.Count(r => r.Asistio);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        Cargando = true;
+        MensajeError = string.Empty;
+
+        var detalle = await Catalogo.ObtenerDetalleAsync(Id);
+        if (detalle.Exito && detalle.Datos is not null)
+        {
+            Evento = detalle.Datos;
+        }
+
+        var resultado = await Participacion.ListarAsistenciaAsync(Id);
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            Registros = resultado.Datos;
+        }
+        else
+        {
+            Registros = new List<AsistenciaDto>();
+            MensajeError = resultado.Mensaje;
+        }
+
+        Cargando = false;
+    }
+}

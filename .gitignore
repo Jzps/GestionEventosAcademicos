@@ -1,0 +1,33 @@
+# Compilación de .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.swp
+
+# Entorno
+.env
+!.env.example
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
+
+# Pruebas
+TestResults/
+coverage*.xml
+coverage*.json
+*.trx
+
+# Node.js (pruebas de interfaz con Playwright)
+node_modules/

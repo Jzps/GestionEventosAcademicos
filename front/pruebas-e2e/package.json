@@ -1,0 +1,12 @@
+{
+  "name": "pruebas-e2e-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pruebas de extremo a extremo de la interfaz Blazor con Playwright (canal Microsoft Edge).",
+  "scripts": {
+    "test": "node prueba-frontend.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

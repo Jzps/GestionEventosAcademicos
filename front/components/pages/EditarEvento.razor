@@ -1,0 +1,193 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/responsable/eventos/{Id:long}/editar"
+@attribute [Authorize(Roles = "Responsable")]
+@inject ServicioEventos Catalogo
+@inject NavigationManager Navegacion
+
+<PageTitle>Modificar evento</PageTitle>
+
+<section class="contenedor seccion seccion-formulario">
+    <nav class="migas" aria-label="Ruta de navegación">
+        <a href="/responsable/eventos">Mis eventos</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Modificar evento</span>
+    </nav>
+
+    <h1>Modificar evento</h1>
+
+    <Mensaje Tipo="exito" Texto="@MensajeExito" />
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    @if (Cargando)
+    {
+        <Cargando Texto="Cargando la información del evento…" />
+    }
+    else if (Evento is not null && Evento.Estado == EstadoEvento.Cancelado)
+    {
+        <Mensaje Tipo="aviso"
+                 Texto="Este evento fue retirado: ya no está disponible para los estudiantes y no admite modificaciones." />
+        <a class="boton boton-primario" href="/responsable/eventos">Volver a mis eventos</a>
+    }
+    else
+    {
+        <EditForm Model="Modelo" OnValidSubmit="Guardar" FormName="formulario-editar-evento">
+            <DataAnnotationsValidator />
+
+            <div class="formulario-tarjeta">
+                <div class="campo">
+                    <label for="nombre">Nombre del evento <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputText id="nombre" @bind-Value="Modelo.Nombre" class="control" />
+                    <ValidationMessage For="() => Modelo.Nombre" />
+                </div>
+
+                <div class="campo">
+                    <label for="descripcion">Descripción <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputTextArea id="descripcion" @bind-Value="Modelo.Descripcion" class="control" rows="4" />
+                    <ValidationMessage For="() => Modelo.Descripcion" />
+                </div>
+
+                <div class="campo-cuadricula">
+                    <div class="campo">
+                        <label for="inicio">Fecha y hora de inicio <span class="obligatorio" aria-hidden="true">*</span></label>
+                        <InputDate id="inicio" Type="InputDateType.DateTimeLocal" @bind-Value="Modelo.FechaHoraInicio" class="control" />
+                        <ValidationMessage For="() => Modelo.FechaHoraInicio" />
+                    </div>
+
+                    <div class="campo">
+                        <label for="fin">Fecha y hora de finalización <span class="obligatorio" aria-hidden="true">*</span></label>
+                        <InputDate id="fin" Type="InputDateType.DateTimeLocal" @bind-Value="Modelo.FechaHoraFin" class="control" />
+                        <ValidationMessage For="() => Modelo.FechaHoraFin" />
+                    </div>
+                </div>
+
+                <div class="campo-cuadricula">
+                    <div class="campo">
+                        <label for="lugar">Lugar <span class="obligatorio" aria-hidden="true">*</span></label>
+                        <InputText id="lugar" @bind-Value="Modelo.Lugar" class="control" />
+                        <ValidationMessage For="() => Modelo.Lugar" />
+                    </div>
+
+                    <div class="campo">
+                        <label for="cupos">Cupos totales <span class="obligatorio" aria-hidden="true">*</span></label>
+                        <InputNumber id="cupos" @bind-Value="Modelo.CuposTotales" class="control" />
+                        <ValidationMessage For="() => Modelo.CuposTotales" />
+                    </div>
+                </div>
+
+                <div class="campo">
+                    <label for="categoria">Categoría <span class="obligatorio" aria-hidden="true">*</span></label>
+                    @if (Cargando)
+                    {
+                        <p class="texto-ayuda" role="status" aria-live="polite">Cargando las categorías disponibles…</p>
+                    }
+                    else
+                    {
+                        <InputSelect id="categoria" @bind-Value="Modelo.CategoriaId" class="control">
+                            <option value="0">Seleccione una categoría</option>
+                            @foreach (var categoria in Categorias)
+                            {
+                                <option value="@categoria.Id">@categoria.Nombre</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => Modelo.CategoriaId" />
+                    }
+                </div>
+
+                <div class="formulario-acciones">
+                    <button type="submit" class="boton boton-primario" disabled="@Procesando">
+                        @(Procesando ? "Guardando…" : "Guardar cambios")
+                    </button>
+                    <a class="boton boton-contorno" href="/responsable/eventos">Cancelar</a>
+                </div>
+            </div>
+        </EditForm>
+    }
+</section>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private readonly ModeloEventoFormulario Modelo = new();
+    private List<CategoriaDto> Categorias = new();
+    private EventoDetalleDto? Evento;
+    private bool Cargando = true;
+    private bool Procesando;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        Cargando = true;
+        MensajeError = string.Empty;
+
+        var categorias = await Catalogo.ListarCategoriasAsync();
+        if (categorias.Exito && categorias.Datos is not null)
+        {
+            Categorias = categorias.Datos;
+        }
+        else
+        {
+            Categorias = new List<CategoriaDto>();
+            MensajeError = $"No fue posible cargar las categorías: {categorias.Mensaje}";
+        }
+
+        var detalle = await Catalogo.ObtenerDetalleAsync(Id);
+
+        if (!detalle.Exito || detalle.Datos is null)
+        {
+            MensajeError = detalle.Mensaje;
+            Cargando = false;
+            return;
+        }
+
+        var evento = detalle.Datos;
+        Evento = evento;
+        Modelo.Nombre = evento.Nombre;
+        Modelo.Descripcion = evento.Descripcion;
+        Modelo.FechaHoraInicio = evento.FechaHoraInicio;
+        Modelo.FechaHoraFin = evento.FechaHoraFin;
+        Modelo.Lugar = evento.Lugar;
+        Modelo.CuposTotales = evento.CuposTotales;
+        Modelo.CategoriaId = evento.CategoriaId;
+
+        Cargando = false;
+    }
+
+    private async Task Guardar()
+    {
+        Procesando = true;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+
+        try
+        {
+            var resultado = await Catalogo.ModificarAsync(Id, Modelo);
+
+            if (!resultado.Exito)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            MensajeExito = "Los cambios del evento fueron guardados correctamente.";
+            await Task.Delay(1200);
+            Navegacion.NavigateTo("/responsable/eventos");
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

@@ -1,0 +1,113 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/registro"
+@attribute [AllowAnonymous]
+@inject ServicioAutenticacion Autenticacion
+@inject NavigationManager Navegacion
+
+<PageTitle>Crear cuenta de estudiante</PageTitle>
+
+<section class="contenedor seccion seccion-acceso">
+    <div class="tarjeta-acceso tarjeta-registro">
+        <h1>Crear cuenta de estudiante</h1>
+        <p class="texto-suave">
+            Registre su cuenta para consultar los eventos y gestionar sus inscripciones.
+        </p>
+
+        <Mensaje Tipo="error" Texto="@MensajeError" />
+
+        <EditForm Model="Modelo" OnValidSubmit="CrearCuenta" FormName="formulario-registro">
+            <DataAnnotationsValidator />
+
+            <div class="campo">
+                <label for="nombre">Nombre completo <span class="obligatorio" aria-hidden="true">*</span></label>
+                <InputText id="nombre" @bind-Value="Modelo.NombreCompleto" class="control" autocomplete="name" />
+                <ValidationMessage For="() => Modelo.NombreCompleto" />
+            </div>
+
+            <div class="campo">
+                <label for="correo">Correo institucional <span class="obligatorio" aria-hidden="true">*</span></label>
+                <InputText id="correo" type="email" @bind-Value="Modelo.Email" class="control" autocomplete="email" />
+                <ValidationMessage For="() => Modelo.Email" />
+            </div>
+
+            <div class="campo-cuadricula">
+                <div class="campo">
+                    <label for="codigo">Código de estudiante <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputText id="codigo" @bind-Value="Modelo.Codigo" class="control" placeholder="Ej.: EST2025001" />
+                    <ValidationMessage For="() => Modelo.Codigo" />
+                </div>
+
+                <div class="campo">
+                    <label for="programa">Programa <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputText id="programa" @bind-Value="Modelo.Programa" class="control" placeholder="Ej.: Ingeniería de Sistemas" />
+                    <ValidationMessage For="() => Modelo.Programa" />
+                </div>
+            </div>
+
+            <div class="campo-cuadricula">
+                <div class="campo">
+                    <label for="contrasena">Contraseña <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputText id="contrasena" type="password" @bind-Value="Modelo.Contrasena" class="control" autocomplete="new-password" />
+                    <p class="texto-ayuda">Mínimo 8 caracteres, con mayúscula, minúscula y número.</p>
+                    <ValidationMessage For="() => Modelo.Contrasena" />
+                </div>
+
+                <div class="campo">
+                    <label for="confirmar">Repetir contraseña <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputText id="confirmar" type="password" @bind-Value="Modelo.ConfirmarContrasena" class="control" autocomplete="new-password" />
+                    <ValidationMessage For="() => Modelo.ConfirmarContrasena" />
+                </div>
+            </div>
+
+            <button type="submit" class="boton boton-primario boton-ancho" disabled="@Procesando">
+                @(Procesando ? "Creando la cuenta…" : "Crear cuenta")
+            </button>
+        </EditForm>
+
+        <div class="tarjeta-acceso-ayuda">
+            <p>
+                El registro público es solo para cuentas de <strong>Estudiante</strong>.
+                Las cuentas de <strong>Responsable</strong> se habilitan por el administración del sistema.
+            </p>
+            <p>¿Ya tiene cuenta? <a href="/acceder">Iniciar sesión</a></p>
+        </div>
+    </div>
+</section>
+
+@code {
+    private readonly ModeloRegistroFormulario Modelo = new();
+    private string MensajeError = string.Empty;
+    private bool Procesando;
+
+    private async Task CrearCuenta()
+    {
+        if (Procesando)
+        {
+            return;
+        }
+
+        Procesando = true;
+        MensajeError = string.Empty;
+
+        try
+        {
+            var resultado = await Autenticacion.RegistrarAsync(Modelo);
+
+            if (!resultado.Exito || resultado.Datos is null)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            // La cuenta queda creada y con sesión iniciada: el navegador visita el
+            // endpoint de sesión, que canjea el ticket por la cookie cifrada.
+            Navegacion.NavigateTo(
+                $"/api-sesion/establecer?ticket={Uri.EscapeDataString(resultado.Datos.Ticket)}&destino={Uri.EscapeDataString("/eventos")}",
+                forceLoad: true);
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

@@ -1,0 +1,33 @@
+@namespace FrontGestionEventos.Components.Shared
+@* Etiqueta de estado del evento. Combina un icono y un texto, de modo que la información
+   no depende únicamente del color. *@
+
+<span class="etiqueta etiqueta-estado estado-@EstadoCss">
+    <span class="etiqueta-icono" aria-hidden="true">@Icono</span>
+    @Texto
+</span>
+
+@code {
+    [Parameter] public string Estado { get; set; } = "0";
+    [Parameter] public string Texto { get; set; } = string.Empty;
+
+    private string Icono => Estado switch
+    {
+        "1" => "●",
+        "2" => "◐",
+        "3" => "▶",
+        "4" => "✓",
+        "5" => "✕",
+        _ => "○"
+    };
+
+    private string EstadoCss => Estado switch
+    {
+        "1" => "inscripciones-abiertas",
+        "2" => "inscripciones-cerradas",
+        "3" => "en-curso",
+        "4" => "finalizado",
+        "5" => "cancelado",
+        _ => "programado"
+    };
+}

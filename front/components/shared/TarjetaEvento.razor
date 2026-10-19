@@ -1,0 +1,93 @@
+@namespace FrontGestionEventos.Components.Shared
+
+@* Tarjeta reutilizable para presentar un evento en los listados. *@
+
+<article class="tarjeta-evento">
+    <header class="tarjeta-cabecera">
+        <EtiquetaEstado Estado="@EstadoNumerico" Texto="@Evento.EstadoDescripcion" />
+        <span class="tarjeta-categoria">@Evento.NombreCategoria</span>
+    </header>
+
+    <h3 class="tarjeta-titulo">
+        <a href="@EnlaceDetalle">@Evento.Nombre</a>
+    </h3>
+
+    <p class="tarjeta-descripcion">@Evento.Descripcion</p>
+
+    <dl class="tarjeta-datos">
+        <div>
+            <dt>Fecha y hora</dt>
+            <dd>@Evento.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm")</dd>
+        </div>
+        <div>
+            <dt>Lugar</dt>
+            <dd>@Evento.Lugar</dd>
+        </div>
+        <div>
+            <dt>Responsable</dt>
+            <dd>@Evento.NombreResponsable</dd>
+        </div>
+    </dl>
+
+    <div class="tarjeta-cupos">
+        <div class="cupos-encabezado">
+            <span class="cupos-etiqueta">Cupos disponibles</span>
+            <span class="cupos-valor">@Evento.CuposDisponibles <span class="cupos-total">de @Evento.CuposTotales</span></span>
+        </div>
+        <div class="barra-cupos" role="img" aria-label="@($"{Evento.CuposDisponibles} cupos disponibles de {Evento.CuposTotales}")">
+            <span class="barra-relleno" style="width: @PorcentajeOcupado%"></span>
+        </div>
+    </div>
+
+    <footer class="tarjeta-pie">
+        <a class="boton boton-secundario" href="@EnlaceDetalle">Ver detalle</a>
+
+        @* La inscripción es una operación exclusiva del rol Estudiante. *@
+        <AuthorizeView Roles="Estudiante">
+            <Authorized>
+                @if (Evento.EstaInscrito)
+                {
+                    <span class="estado-inscripcion" role="status">
+                        <span class="estado-inscripcion-icono" aria-hidden="true">✓</span>
+                        Ya estás inscrito
+                    </span>
+                }
+                else if (Evento.AdmiteInscripciones)
+                {
+                    <button type="button" class="boton boton-primario" @onclick="() => OnInscribirse.InvokeAsync(Evento)">
+                        Inscribirme
+                    </button>
+                }
+                else
+                {
+                    <span class="texto-ayuda" title="@Evento.EstadoDescripcion">Inscripciones no disponibles</span>
+                }
+            </Authorized>
+        </AuthorizeView>
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public EventoResumenDto Evento { get; set; } = new();
+
+    /// <summary>Callback de la acción de inscripción.</summary>
+    [Parameter] public EventCallback<EventoResumenDto> OnInscribirse { get; set; }
+
+    private string EnlaceDetalle => $"/eventos/{Evento.Id}";
+
+    private string EstadoNumerico => ((int)Evento.Estado).ToString();
+
+    private int PorcentajeOcupado
+    {
+        get
+        {
+            if (Evento.CuposTotales <= 0)
+            {
+                return 100;
+            }
+
+            var ocupados = Evento.CuposTotales - Evento.CuposDisponibles;
+            return Math.Clamp((int)Math.Round(ocupados * 100.0 / Evento.CuposTotales), 0, 100);
+        }
+    }
+}

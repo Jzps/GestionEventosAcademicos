@@ -1,0 +1,252 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/responsable/eventos"
+@attribute [Authorize(Roles = "Responsable")]
+@inject ServicioEventos Catalogo
+@inject NavigationManager Navegacion
+
+<PageTitle>Mis eventos</PageTitle>
+
+<section class="contenedor seccion">
+    <div class="seccion-encabezado">
+        <div>
+            <h1>Mis eventos</h1>
+            <p class="texto-suave">Eventos registrados y administrados por su cuenta.</p>
+        </div>
+        <a class="boton boton-primario" href="/responsable/eventos/nuevo">Registrar evento</a>
+    </div>
+
+    <Mensaje Tipo="exito" Texto="@MensajeExito" />
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    @if (EventoPendiente is not null)
+    {
+        <div class="confirmacion" role="group" aria-labelledby="titulo-confirmacion-retiro">
+            <h2 class="confirmacion-titulo" id="titulo-confirmacion-retiro">¿Retirar el evento «@EventoPendiente.Nombre»?</h2>
+            <p class="confirmacion-texto">
+                El evento dejará de estar disponible para los estudiantes y <strong>no podrá modificarse</strong>.
+                Sus inscripciones activas quedarán canceladas; el historial de inscripciones y asistencias se conserva.
+            </p>
+            <div class="formulario-acciones">
+                <button type="button" class="boton boton-peligro" disabled="@Procesando" @onclick="ConfirmarRetiro">
+                    @(Procesando ? "Retirando…" : "Sí, retirar el evento")
+                </button>
+                <button type="button" class="boton boton-contorno" disabled="@Procesando" @onclick="CancelarRetiro">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (Cargando)
+    {
+        <Cargando Texto="Consultando los eventos que administra…" />
+    }
+    else if (ListaEventos.Count == 0)
+    {
+        <EstadoVacio Titulo="Todavía no ha registrado eventos"
+                     Descripcion="Registre su primer evento académico para ponerlo a disposición de los estudiantes."
+                     MostrarAccion="true"
+                     TextoAccion="Registrar evento"
+                     Destino="/responsable/eventos/nuevo" />
+    }
+    else
+    {
+        <h2 class="subtitulo-seccion">Eventos operativos</h2>
+        <p class="resultado-conteo">
+            @Operativos.Count @(Operativos.Count == 1 ? "evento" : "eventos") en actividad.
+        </p>
+
+        @if (Operativos.Count == 0)
+        {
+            <EstadoVacio Titulo="No tiene eventos en actividad"
+                         Descripcion="Los eventos que retire dejan de aparecer en esta vista y se conservan en el historial de retirados." />
+        }
+        else
+        {
+            <div class="tabla-contenedor">
+                <table class="tabla">
+                    <caption class="solo-lectores">Eventos administrados por usted</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Evento</th>
+                            <th scope="col">Fecha y hora</th>
+                            <th scope="col">Categoría</th>
+                            <th scope="col">Cupos</th>
+                            <th scope="col">Estado</th>
+                            <th scope="col">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var evento in Operativos)
+                        {
+                            <tr>
+                                <td data-label="Evento">
+                                    <a href="@($"/responsable/eventos/{evento.Id}/participantes")">@evento.Nombre</a>
+                                    <small class="celda-secundaria">@evento.Lugar</small>
+                                </td>
+                                <td data-label="Fecha y hora">@evento.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm")</td>
+                                <td data-label="Categoría">@evento.NombreCategoria</td>
+                                <td data-label="Cupos">@evento.CuposDisponibles de @evento.CuposTotales</td>
+                                <td data-label="Estado">
+                                    <EtiquetaEstado Estado="@EstadoNumerico(evento)" Texto="@evento.EstadoDescripcion" />
+                                </td>
+                                <td data-label="Acciones">
+                                    <div class="grupo-acciones">
+                                        <a class="boton boton-secundario boton-pequeno" href="@($"/responsable/eventos/{evento.Id}/editar")">Modificar</a>
+                                        <a class="boton boton-contorno boton-pequeno" href="@($"/responsable/eventos/{evento.Id}/participantes")">Participantes</a>
+                                        <a class="boton boton-contorno boton-pequeno" href="@($"/responsable/eventos/{evento.Id}/asistencia")">Asistencia</a>
+                                        <button type="button" class="boton boton-peligro boton-pequeno"
+                                                disabled="@Procesando"
+                                                @onclick="() => PedirRetiro(evento)">
+                                            Eliminar evento
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (Retirados.Count > 0)
+        {
+            <details class="historial">
+                <summary class="historial-resumen">
+                    Eventos retirados (@Retirados.Count @(Retirados.Count == 1 ? "evento" : "eventos"))
+                </summary>
+
+                <p class="texto-suave texto-pequeno">
+                    Los eventos retirados no están disponibles para los estudiantes y sus inscripciones
+                    activas quedaron canceladas. No pueden modificarse ni reactivarse.
+                </p>
+
+                <div class="tabla-contenedor">
+                    <table class="tabla">
+                        <caption class="solo-lectores">Eventos retirados por usted</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Evento</th>
+                                <th scope="col">Fecha y hora</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var evento in Retirados)
+                            {
+                                <tr>
+                                    <td data-label="Evento">
+                                        @evento.Nombre
+                                        <small class="celda-secundaria">@evento.Lugar</small>
+                                    </td>
+                                    <td data-label="Fecha y hora">@evento.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm")</td>
+                                    <td data-label="Estado">
+                                        <EtiquetaEstado Estado="@EstadoNumerico(evento)" Texto="@evento.EstadoDescripcion" />
+                                    </td>
+                                    <td data-label="Acciones">
+                                        <span class="texto-ayuda">Retirado: no admite modificaciones</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        }
+    }
+</section>
+
+@code {
+    private List<EventoResumenDto> ListaEventos = new();
+    private EventoResumenDto? EventoPendiente;
+    private bool Cargando = true;
+    private bool Procesando;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+
+    /// <summary>Eventos que siguen en la actividad operativa.</summary>
+    private List<EventoResumenDto> Operativos => ListaEventos.Where(e => e.Estado != EstadoEvento.Cancelado).ToList();
+
+    /// <summary>Eventos retirados: no disponibles y no modificables.</summary>
+    private List<EventoResumenDto> Retirados => ListaEventos.Where(e => e.Estado == EstadoEvento.Cancelado).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        Cargando = true;
+        MensajeError = string.Empty;
+
+        var resultado = await Catalogo.ListarGestionadosAsync();
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            ListaEventos = resultado.Datos;
+        }
+        else
+        {
+            ListaEventos = new List<EventoResumenDto>();
+            MensajeError = resultado.Mensaje;
+        }
+
+        Cargando = false;
+    }
+
+    private void PedirRetiro(EventoResumenDto evento)
+    {
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+        EventoPendiente = evento;
+    }
+
+    private void CancelarRetiro() => EventoPendiente = null;
+
+    private async Task ConfirmarRetiro()
+    {
+        if (EventoPendiente is null || Procesando)
+        {
+            // Evita dobles envíos mientras la operación está en curso.
+            return;
+        }
+
+        Procesando = true;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+        var evento = EventoPendiente;
+
+        try
+        {
+            var resultado = await Catalogo.RetirarEventoAsync(evento.Id);
+
+            if (!resultado.Exito)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            MensajeExito = resultado.Datos?.Mensaje
+                ?? $"El evento «{evento.Nombre}» fue retirado y ya no está disponible para los estudiantes.";
+        }
+        finally
+        {
+            Procesando = false;
+            EventoPendiente = null;
+        }
+
+        // El listado se recarga para reflejar el estado real persistido en SQL Server.
+        await Cargar();
+    }
+
+    private static string EstadoNumerico(EventoResumenDto evento) => ((int)evento.Estado).ToString();
+}

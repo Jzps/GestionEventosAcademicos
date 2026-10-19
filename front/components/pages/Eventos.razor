@@ -1,0 +1,175 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/eventos"
+@attribute [Authorize]
+@inject ServicioEventos Catalogo
+@inject ServicioInscripciones Inscripciones
+@inject NavigationManager Navegacion
+
+<PageTitle>Eventos disponibles</PageTitle>
+
+<section class="contenedor seccion">
+    <div class="seccion-encabezado">
+        <div>
+            <h1>Eventos disponibles</h1>
+            <p class="texto-suave">Consulte los eventos académicos y filtre por nombre, fecha o categoría.</p>
+        </div>
+    </div>
+
+    <Mensaje Tipo="exito" Texto="@MensajeExito" />
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    <EditForm Model="Filtros" OnValidSubmit="AplicarFiltros" FormName="formulario-filtros">
+        <div class="panel-filtros">
+            <div class="campo">
+                <label for="filtro-nombre">Nombre del evento</label>
+                <InputText id="filtro-nombre" @bind-Value="Filtros.Nombre" class="control" placeholder="Ej.: Seminario" />
+            </div>
+
+            <div class="campo">
+                <label for="filtro-fecha">Fecha</label>
+                <InputDate id="filtro-fecha" @bind-Value="Filtros.Fecha" class="control" />
+            </div>
+
+            <div class="campo">
+                <label for="filtro-categoria">Categoría</label>
+                <InputSelect id="filtro-categoria" @bind-Value="Filtros.CategoriaId" class="control">
+                    <option value="0">Todas las categorías</option>
+                    @foreach (var categoria in Categorias)
+                    {
+                        <option value="@categoria.Id">@categoria.Nombre</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="acciones-filtro">
+                <button type="submit" class="boton boton-primario" disabled="@Cargando">Aplicar filtros</button>
+                <button type="button" class="boton boton-contorno" @onclick="LimpiarFiltros" disabled="@Cargando">Limpiar</button>
+            </div>
+        </div>
+    </EditForm>
+
+    @if (Cargando)
+    {
+        <Cargando Texto="Consultando los eventos…" />
+    }
+    else if (ListaEventos.Count == 0)
+    {
+        <EstadoVacio Titulo="No se encontraron eventos"
+                     Descripcion="Ajuste los filtros o inténtelo de nuevo más tarde." />
+    }
+    else
+    {
+        <p class="resultado-conteo">Se encontraron @ListaEventos.Count @(ListaEventos.Count == 1 ? "evento" : "eventos").</p>
+        <div class="rejilla-tarjetas">
+            @foreach (var evento in ListaEventos)
+            {
+                <TarjetaEvento Evento="@evento" OnInscribirse="Inscribirse" />
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private readonly ModeloFiltros Filtros = new();
+    private List<EventoResumenDto> ListaEventos = new();
+    private List<CategoriaDto> Categorias = new();
+    private bool Cargando = true;
+    private bool Inscribiendo;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        var categorias = await Catalogo.ListarCategoriasAsync();
+        if (categorias.Exito && categorias.Datos is not null)
+        {
+            Categorias = categorias.Datos;
+        }
+
+        await CargarEventos();
+    }
+
+    private async Task CargarEventos()
+    {
+        Cargando = true;
+        MensajeError = string.Empty;
+
+        var resultado = await Catalogo.ListarAsync(Filtros.Nombre, Filtros.Fecha, Filtros.CategoriaId > 0 ? Filtros.CategoriaId : null);
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            ListaEventos = resultado.Datos;
+        }
+        else
+        {
+            ListaEventos = new List<EventoResumenDto>();
+            MensajeError = resultado.Mensaje;
+        }
+
+        Cargando = false;
+    }
+
+    private async Task AplicarFiltros()
+    {
+        MensajeExito = string.Empty;
+        await CargarEventos();
+    }
+
+    private async Task LimpiarFiltros()
+    {
+        Filtros.Nombre = string.Empty;
+        Filtros.Fecha = null;
+        Filtros.CategoriaId = 0;
+        MensajeExito = string.Empty;
+        await CargarEventos();
+    }
+
+    private async Task Inscribirse(EventoResumenDto evento)
+    {
+        if (Inscribiendo)
+        {
+            // Evita dobles envíos mientras la petición está en curso.
+            return;
+        }
+
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+        Inscribiendo = true;
+
+        try
+        {
+            var resultado = await Inscripciones.InscribirseAsync(evento.Id);
+
+            if (!resultado.Exito)
+            {
+                MensajeError = resultado.Mensaje;
+                await CargarEventos();
+                return;
+            }
+
+            MensajeExito = $"Su inscripción al evento «{evento.Nombre}» quedó registrada correctamente.";
+        }
+        finally
+        {
+            Inscribiendo = false;
+        }
+
+        // El listado se recarga para que las tarjetas reflejen el estado real
+        // (inscripción activa y cupos disponibles) sin recargar la aplicación.
+        await CargarEventos();
+    }
+
+    private sealed class ModeloFiltros
+    {
+        public string? Nombre { get; set; }
+        public DateTime? Fecha { get; set; }
+        public long CategoriaId { get; set; }
+    }
+}

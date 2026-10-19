@@ -1,0 +1,42 @@
+@namespace FrontGestionEventos.Components.Shared
+@* Mensaje de estado reutilizable. No se comunica el estado solo con color: siempre lleva texto. *@
+
+@if (!string.IsNullOrWhiteSpace(Texto))
+{
+    @if (Tipo is "exito")
+    {
+        <div class="mensaje mensaje-exito" role="status" aria-live="polite">
+            <span class="mensaje-icono" aria-hidden="true">✓</span>
+            <span>@Texto</span>
+        </div>
+    }
+    else if (Tipo is "error")
+    {
+        <div class="mensaje mensaje-error" role="alert">
+            <span class="mensaje-icono" aria-hidden="true">!</span>
+            <span>@Texto</span>
+        </div>
+    }
+    else if (Tipo is "aviso")
+    {
+        <div class="mensaje mensaje-aviso" role="status" aria-live="polite">
+            <span class="mensaje-icono" aria-hidden="true">i</span>
+            <span>@Texto</span>
+        </div>
+    }
+    else
+    {
+        <div class="mensaje mensaje-info" role="status" aria-live="polite">
+            <span class="mensaje-icono" aria-hidden="true">i</span>
+            <span>@Texto</span>
+        </div>
+    }
+}
+
+@code {
+    /// <summary>Texto del mensaje. Si se deja vacío no se renderiza ningún elemento.</summary>
+    [Parameter] public string Texto { get; set; } = string.Empty;
+
+    /// <summary>Tipo de mensaje: exito, error, aviso o info.</summary>
+    [Parameter] public string Tipo { get; set; } = "info";
+}
