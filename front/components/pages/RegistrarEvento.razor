@@ -1,0 +1,176 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/responsable/eventos/nuevo"
+@attribute [Authorize(Roles = "Responsable")]
+@inject ServicioEventos Catalogo
+@inject NavigationManager Navegacion
+
+<PageTitle>Registrar evento</PageTitle>
+
+<section class="contenedor seccion seccion-formulario">
+    <nav class="migas" aria-label="Ruta de navegación">
+        <a href="/responsable/eventos">Mis eventos</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Registrar evento</span>
+    </nav>
+
+    <h1>Registrar evento</h1>
+    <p class="texto-suave">
+        Complete la información del evento. Las fechas y los cupos se validan nuevamente en el servidor.
+    </p>
+
+    <Mensaje Tipo="exito" Texto="@MensajeExito" />
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    <EditForm Model="Modelo" OnValidSubmit="Registrar" FormName="formulario-registro-evento">
+        <DataAnnotationsValidator />
+
+        <div class="formulario-tarjeta">
+            <div class="campo">
+                <label for="nombre">Nombre del evento <span class="obligatorio" aria-hidden="true">*</span></label>
+                <InputText id="nombre" @bind-Value="Modelo.Nombre" class="control" />
+                <ValidationMessage For="() => Modelo.Nombre" />
+            </div>
+
+            <div class="campo">
+                <label for="descripcion">Descripción <span class="obligatorio" aria-hidden="true">*</span></label>
+                <InputTextArea id="descripcion" @bind-Value="Modelo.Descripcion" class="control" rows="4" />
+                <ValidationMessage For="() => Modelo.Descripcion" />
+            </div>
+
+            <div class="campo-cuadricula">
+                <div class="campo">
+                    <label for="inicio">Fecha y hora de inicio <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputDate id="inicio" Type="InputDateType.DateTimeLocal" @bind-Value="Modelo.FechaHoraInicio" class="control" />
+                    <ValidationMessage For="() => Modelo.FechaHoraInicio" />
+                </div>
+
+                <div class="campo">
+                    <label for="fin">Fecha y hora de finalización <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputDate id="fin" Type="InputDateType.DateTimeLocal" @bind-Value="Modelo.FechaHoraFin" class="control" />
+                    <ValidationMessage For="() => Modelo.FechaHoraFin" />
+                </div>
+            </div>
+
+            <div class="campo-cuadricula">
+                <div class="campo">
+                    <label for="lugar">Lugar <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputText id="lugar" @bind-Value="Modelo.Lugar" class="control" placeholder="Ej.: Auditorio Principal" />
+                    <ValidationMessage For="() => Modelo.Lugar" />
+                </div>
+
+                <div class="campo">
+                    <label for="cupos">Cupos totales <span class="obligatorio" aria-hidden="true">*</span></label>
+                    <InputNumber id="cupos" @bind-Value="Modelo.CuposTotales" class="control" />
+                    <ValidationMessage For="() => Modelo.CuposTotales" />
+                </div>
+            </div>
+
+            <div class="campo">
+                <label for="categoria">Categoría <span class="obligatorio" aria-hidden="true">*</span></label>
+
+                @if (CargandoCategorias)
+                {
+                    <p class="texto-ayuda" role="status" aria-live="polite">Cargando las categorías disponibles…</p>
+                }
+                else if (!string.IsNullOrWhiteSpace(ErrorCategorias))
+                {
+                    <Mensaje Tipo="error" Texto="@ErrorCategorias" />
+                    <button type="button" class="boton boton-contorno boton-pequeno" @onclick="CargarCategoriasAsync">
+                        Reintentar la carga de categorías
+                    </button>
+                }
+                else if (Categorias.Count == 0)
+                {
+                    <Mensaje Tipo="aviso"
+                             Texto="No hay categorías registradas en el sistema. El registro de eventos no puede completarse hasta que exista al menos una categoría." />
+                }
+                else
+                {
+                    <InputSelect id="categoria" @bind-Value="Modelo.CategoriaId" class="control">
+                        <option value="0">Seleccione una categoría</option>
+                        @foreach (var categoria in Categorias)
+                        {
+                            <option value="@categoria.Id">@categoria.Nombre</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => Modelo.CategoriaId" />
+                }
+            </div>
+
+            <div class="formulario-acciones">
+                <button type="submit" class="boton boton-primario" disabled="@(Procesando || CargandoCategorias || Categorias.Count == 0)">
+                    @(Procesando ? "Registrando…" : "Registrar evento")
+                </button>
+                <a class="boton boton-contorno" href="/responsable/eventos">Cancelar</a>
+            </div>
+        </div>
+    </EditForm>
+</section>
+
+@code {
+    private readonly ModeloEventoFormulario Modelo = new();
+    private List<CategoriaDto> Categorias = new();
+    private bool CargandoCategorias = true;
+    private bool Procesando;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+    private string ErrorCategorias = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await CargarCategoriasAsync();
+    }
+
+    private async Task CargarCategoriasAsync()
+    {
+        CargandoCategorias = true;
+        ErrorCategorias = string.Empty;
+
+        var resultado = await Catalogo.ListarCategoriasAsync();
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            Categorias = resultado.Datos;
+        }
+        else
+        {
+            Categorias = new List<CategoriaDto>();
+            ErrorCategorias = resultado.Mensaje;
+        }
+
+        CargandoCategorias = false;
+    }
+
+    private async Task Registrar()
+    {
+        Procesando = true;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+
+        try
+        {
+            var resultado = await Catalogo.RegistrarAsync(Modelo);
+
+            if (!resultado.Exito)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            MensajeExito = $"El evento «{resultado.Datos?.Nombre}» fue registrado correctamente.";
+            await Task.Delay(1200);
+            Navegacion.NavigateTo("/responsable/eventos");
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

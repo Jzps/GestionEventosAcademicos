@@ -1,0 +1,258 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/responsable/eventos/{Id:long}/participantes"
+@attribute [Authorize(Roles = "Responsable")]
+@inject ServicioEventos Catalogo
+@inject ServicioParticipacion Participacion
+
+<PageTitle>Participantes del evento</PageTitle>
+
+<section class="contenedor seccion">
+    <nav class="migas" aria-label="Ruta de navegación">
+        <a href="/responsable/eventos">Mis eventos</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Participantes</span>
+    </nav>
+
+    <div class="seccion-encabezado">
+        <div>
+            <h1>Participantes</h1>
+            @if (Evento is not null)
+            {
+                <p class="texto-suave">@Evento.Nombre · @Evento.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm") · @Evento.Lugar</p>
+            }
+        </div>
+        <a class="boton boton-contorno" href="@($"/responsable/eventos/{Id}/asistencia")">Ver registro de asistencia</a>
+    </div>
+
+    <Mensaje Tipo="exito" Texto="@MensajeExito" />
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    @if (Cargando)
+    {
+        <Cargando Texto="Consultando los participantes…" />
+    }
+    else if (ListaParticipantes.Count == 0)
+    {
+        <EstadoVacio Titulo="Aún no hay participantes inscritos"
+                     Descripcion="Los estudiantes que se inscriban al evento aparecerán en esta lista." />
+    }
+    else
+    {
+        <p class="resultado-conteo">
+            @ListaParticipantes.Count @(ListaParticipantes.Count == 1 ? "participante inscrito" : "participantes inscritos").
+            Registre la asistencia y la observación de cada participante.
+        </p>
+
+        <div class="tabla-contenedor">
+            <table class="tabla tabla-participantes">
+                <caption class="solo-lectores">Estudiantes inscritos en el evento y registro de asistencia</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Estudiante</th>
+                        <th scope="col">Código</th>
+                        <th scope="col">Programa</th>
+                        <th scope="col">Inscripción</th>
+                        <th scope="col">Asistió</th>
+                        <th scope="col">Observación</th>
+                        <th scope="col">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var participante in ListaParticipantes)
+                    {
+                        <tr>
+                            <td data-label="Estudiante">
+                                @participante.NombreCompleto
+                                <small class="celda-secundaria">@participante.Email</small>
+                            </td>
+                            <td data-label="Código">@participante.Codigo</td>
+                            <td data-label="Programa">@participante.Programa</td>
+                            <td data-label="Inscripción">
+                                <span class="etiqueta etiqueta-@CssEstado(participante.EstadoInscripcion)">@participante.EstadoInscripcionDescripcion</span>
+                                <small class="celda-secundaria">@participante.FechaHoraRegistro.ToString("dd/MM/yyyy")</small>
+                            </td>
+                            <td data-label="Asistió">
+                                @if (participante.EstadoInscripcion == EstadoInscripcion.Activa)
+                                {
+                                    <label class="casilla">
+                                        <input type="checkbox"
+                                               checked="@ObtenerAsistio(participante)"
+                                               @onchange="e => CambiarAsistio(participante.InscripcionId, e.Value is true)"
+                                               aria-label="@($"Registrar asistencia de {participante.NombreCompleto}")" />
+                                        <span class="solo-lectores">Asistió</span>
+                                    </label>
+                                }
+                                else
+                                {
+                                    <span class="texto-ayuda">Inscripción cancelada</span>
+                                }
+                            </td>
+                            <td data-label="Observación">
+                                @if (participante.EstadoInscripcion == EstadoInscripcion.Activa)
+                                {
+                                    <label class="solo-lectores" for="observacion-@participante.InscripcionId">
+                                        Observación de @participante.NombreCompleto
+                                    </label>
+                                    <input id="observacion-@participante.InscripcionId"
+                                           type="text"
+                                           class="control control-compacto"
+                                           maxlength="500"
+                                           placeholder="Ej.: llegó tarde"
+                                           value="@ObtenerObservacion(participante)"
+                                           @oninput="e => CambiarObservacion(participante.InscripcionId, e.Value?.ToString() ?? string.Empty)" />
+                                }
+                                else
+                                {
+                                    <span class="texto-ayuda">—</span>
+                                }
+                            </td>
+                            <td data-label="Acciones">
+                                @if (participante.EstadoInscripcion == EstadoInscripcion.Activa)
+                                {
+                                    <button type="button" class="boton boton-primario boton-pequeno"
+                                            disabled="@(Procesando || GuardandoId == participante.InscripcionId)"
+                                            @onclick="() => Guardar(participante)">
+                                        @if (GuardandoId == participante.InscripcionId)
+                                        {
+                                            <span>Guardando…</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@(participante.TieneAsistencia ? "Actualizar" : "Registrar")</span>
+                                        }
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="texto-ayuda">No se puede registrar asistencia</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private List<ParticipanteDto> ListaParticipantes = new();
+    private readonly Dictionary<long, string> Observaciones = new();
+    private readonly Dictionary<long, bool> Asistencias = new();
+    private EventoDetalleDto? Evento;
+    private bool Cargando = true;
+    private bool Procesando;
+    private long? GuardandoId;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        Cargando = true;
+        MensajeError = string.Empty;
+
+        var detalle = await Catalogo.ObtenerDetalleAsync(Id);
+        if (detalle.Exito && detalle.Datos is not null)
+        {
+            Evento = detalle.Datos;
+        }
+        else
+        {
+            MensajeError = detalle.Mensaje;
+        }
+
+        var resultado = await Participacion.ListarParticipantesAsync(Id);
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            ListaParticipantes = resultado.Datos;
+            InicializarFormulario();
+        }
+        else
+        {
+            ListaParticipantes = new List<ParticipanteDto>();
+            MensajeError = resultado.Mensaje;
+        }
+
+        Cargando = false;
+    }
+
+    /// <summary>Carga los valores guardados en el servidor como punto de partida del formulario.</summary>
+    private void InicializarFormulario()
+    {
+        Observaciones.Clear();
+        Asistencias.Clear();
+
+        foreach (var participante in ListaParticipantes)
+        {
+            Observaciones[participante.InscripcionId] = participante.Observacion ?? string.Empty;
+            Asistencias[participante.InscripcionId] = participante.TieneAsistencia && participante.Asistio;
+        }
+    }
+
+    private string ObtenerObservacion(ParticipanteDto participante)
+        => Observaciones.TryGetValue(participante.InscripcionId, out var valor) ? valor : participante.Observacion ?? string.Empty;
+
+    private bool ObtenerAsistio(ParticipanteDto participante)
+        => Asistencias.TryGetValue(participante.InscripcionId, out var valor)
+            ? valor
+            : participante.TieneAsistencia && participante.Asistio;
+
+    private void CambiarObservacion(long inscripcionId, string valor) => Observaciones[inscripcionId] = valor;
+
+    private void CambiarAsistio(long inscripcionId, bool asistio) => Asistencias[inscripcionId] = asistio;
+
+    private async Task Guardar(ParticipanteDto participante)
+    {
+        if (Procesando)
+        {
+            return;
+        }
+
+        Procesando = true;
+        GuardandoId = participante.InscripcionId;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+
+        try
+        {
+            var asistio = ObtenerAsistio(participante);
+            var observacion = ObtenerObservacion(participante).Trim();
+
+            var resultado = await Participacion.RegistrarAsistenciaAsync(participante.InscripcionId, asistio, observacion);
+
+            if (!resultado.Exito)
+            {
+                // Los valores del formulario se conservan para que el usuario pueda corregirlos.
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            MensajeExito = $"Se guardó la asistencia de {participante.NombreCompleto}.";
+        }
+        finally
+        {
+            Procesando = false;
+            GuardandoId = null;
+        }
+
+        // Se recarga la lista para presentar los datos realmente persistidos.
+        await Cargar();
+    }
+
+    private static string CssEstado(EstadoInscripcion estado) => estado == EstadoInscripcion.Activa ? "activa" : "cancelada";
+}

@@ -1,0 +1,56 @@
+@namespace FrontGestionEventos.Components.Layout
+@inherits LayoutComponentBase
+@inject NavigationManager Navegacion
+
+<div class="app-shell">
+    <a class="salto-contenido" href="#contenido-principal">Saltar al contenido principal</a>
+
+    <header class="cabecera">
+        <div class="cabecera-interior">
+            <NavLink class="marca" href="/">
+                <span class="marca-icono" aria-hidden="true">GE</span>
+                <span class="marca-texto">
+                    <strong>Gestión de Eventos Académicos</strong>
+                    <small>Prototipo académico</small>
+                </span>
+            </NavLink>
+
+            <div class="cabecera-usuario">
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="usuario-info">
+                            <span class="usuario-nombre">@context.User.Identity?.Name</span>
+                            <span class="etiqueta etiqueta-@RolCss(context.User)">@RolTexto(context.User)</span>
+                        </div>
+                        <button type="button" class="boton boton-linea" @onclick="CerrarSesion">Cerrar sesión</button>
+                    </Authorized>
+                    <NotAuthorized>
+                        <NavLink class="boton boton-primario boton-pequeno" href="/acceder">Iniciar sesión</NavLink>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+
+        <NavMenu />
+    </header>
+
+    <main class="contenido-principal" id="contenido-principal">
+        @Body
+    </main>
+
+    <footer class="pie">
+        <p>Prototipo académico · Sistema de Gestión de Eventos Académicos · Blazor + ASP.NET Core + SQL Server</p>
+    </footer>
+</div>
+
+@code {
+    private void CerrarSesion()
+        // El endpoint elimina la cookie de sesión y redirige a la pantalla de acceso.
+        => Navegacion.NavigateTo("/api-sesion/cerrar", forceLoad: true);
+
+    private static string RolCss(System.Security.Claims.ClaimsPrincipal usuario)
+        => usuario.IsInRole("Responsable") ? "responsable" : "estudiante";
+
+    private static string RolTexto(System.Security.Claims.ClaimsPrincipal usuario)
+        => usuario.IsInRole("Responsable") ? "Responsable" : "Estudiante";
+}

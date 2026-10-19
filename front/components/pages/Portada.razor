@@ -1,0 +1,65 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/"
+@attribute [AllowAnonymous]
+
+<PageTitle>Gestión de Eventos Académicos</PageTitle>
+
+<section class="portada">
+    <div class="portada-contenido">
+        <p class="portada-kicker">Prototipo académico</p>
+        <h1>Gestión de Eventos Académicos</h1>
+        <p class="portada-bajada">
+            Una plataforma centralizada para registrar, consultar e inscribir estudiantes a los
+            eventos de la institución, y para llevar el control de participantes y asistencia.
+        </p>
+
+        <div class="portada-acciones">
+            <a class="boton boton-primario boton-grande" href="/acceder">Iniciar sesión</a>
+            <a class="boton boton-contorno boton-grande" href="/eventos">Ver eventos disponibles</a>
+        </div>
+    </div>
+
+    <div class="portada-lateral">
+        <div class="tarjeta-rol">
+            <h2>Estudiante</h2>
+            <p>Consulta el listado y el detalle de los eventos, aplica filtros e inscribe o cancela sus inscripciones.</p>
+        </div>
+        <div class="tarjeta-rol">
+            <h2>Responsable</h2>
+            <p>Registra y modifica eventos, consulta los que administra y controla participantes y asistencia.</p>
+        </div>
+    </div>
+</section>
+
+<section class="contenedor seccion">
+    <h2>Cuentas de demostración</h2>
+    <p class="texto-suave">
+        El prototipo incluye cuentas locales de prueba. Son cuentas de demostración y no están
+        conectadas a ninguna plataforma institucional.
+    </p>
+
+    <div class="tabla-contenedor">
+        <table class="tabla">
+            <caption class="solo-lectores">Cuentas de demostración del sistema</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Rol</th>
+                    <th scope="col">Correo</th>
+                    <th scope="col">Contraseña</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="etiqueta etiqueta-estudiante">Estudiante</span></td>
+                    <td><code>estudiante@uni.edu.co</code></td>
+                    <td><code>Estudiante2024!</code></td>
+                </tr>
+                <tr>
+                    <td><span class="etiqueta etiqueta-responsable">Responsable</span></td>
+                    <td><code>responsable@uni.edu.co</code></td>
+                    <td><code>Responsable2024!</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>

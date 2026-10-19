@@ -1,0 +1,23 @@
+@namespace FrontGestionEventos.Components.Shared
+@* Estado vacío reutilizable para listados sin resultados. *@
+
+<div class="estado-vacio" role="status">
+    <span class="estado-vacio-icono" aria-hidden="true">◎</span>
+    <p class="estado-vacio-titulo">@Titulo</p>
+    @if (!string.IsNullOrWhiteSpace(Descripcion))
+    {
+        <p class="estado-vacio-descripcion">@Descripcion</p>
+    }
+    @if (MostrarAccion)
+    {
+        <NavLink class="boton boton-primario" href="@Destino">@TextoAccion</NavLink>
+    }
+</div>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = "No hay registros para mostrar";
+    [Parameter] public string Descripcion { get; set; } = string.Empty;
+    [Parameter] public bool MostrarAccion { get; set; }
+    [Parameter] public string TextoAccion { get; set; } = "Continuar";
+    [Parameter] public string Destino { get; set; } = "/";
+}

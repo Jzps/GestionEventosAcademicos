@@ -1,0 +1,187 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/eventos/{Id:long}"
+@attribute [Authorize]
+@inject ServicioEventos Catalogo
+@inject ServicioInscripciones Inscripciones
+@inject NavigationManager Navegacion
+
+<PageTitle>@(Evento?.Nombre ?? "Detalle del evento")</PageTitle>
+
+<section class="contenedor seccion">
+    @if (Cargando)
+    {
+        <Cargando Texto="Cargando la información del evento…" />
+    }
+    else if (Evento is null)
+    {
+        <EstadoVacio Titulo="Evento no encontrado"
+                     Descripcion="El evento solicitado no existe o fue eliminado."
+                     MostrarAccion="true"
+                     TextoAccion="Volver al listado"
+                     Destino="/eventos" />
+    }
+    else
+    {
+        <nav class="migas" aria-label="Ruta de navegación">
+            <a href="/eventos">Eventos disponibles</a>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">@Evento.Nombre</span>
+        </nav>
+
+        @if (Evento.Estado == EstadoEvento.Cancelado)
+        {
+            <Mensaje Tipo="aviso"
+                     Texto="Este evento fue retirado y ya no está disponible para los estudiantes. No admite nuevas inscripciones." />
+        }
+
+        <div class="detalle-evento">
+            <div class="detalle-principal">
+                <div class="detalle-cabecera">
+                    <EtiquetaEstado Estado="@EstadoNumerico" Texto="@Evento.EstadoDescripcion" />
+                    <span class="tarjeta-categoria">@Evento.NombreCategoria</span>
+                </div>
+
+                <h1>@Evento.Nombre</h1>
+                <p class="detalle-descripcion">@Evento.Descripcion</p>
+
+                <dl class="detalle-datos">
+                    <div>
+                        <dt>Fecha y hora de inicio</dt>
+                        <dd>@Evento.FechaHoraInicio.ToString("dddd, dd/MM/yyyy · HH:mm")</dd>
+                    </div>
+                    <div>
+                        <dt>Fecha y hora de finalización</dt>
+                        <dd>@Evento.FechaHoraFin.ToString("dddd, dd/MM/yyyy · HH:mm")</dd>
+                    </div>
+                    <div>
+                        <dt>Lugar</dt>
+                        <dd>@Evento.Lugar</dd>
+                    </div>
+                    <div>
+                        <dt>Responsable</dt>
+                        <dd>@Evento.NombreResponsable (@Evento.DependenciaResponsable)</dd>
+                    </div>
+                    <div>
+                        <dt>Cupos disponibles</dt>
+                        <dd>@Evento.CuposDisponibles de @Evento.CuposTotales</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <aside class="detalle-lateral">
+                <div class="panel-acciones">
+                    <h2>Participación</h2>
+
+                    @* La inscripción es una operación exclusiva del rol Estudiante. *@
+                    <AuthorizeView Roles="Estudiante">
+                        <Authorized>
+                            @if (Evento.EstaInscrito)
+                            {
+                                <Mensaje Tipo="exito" Texto="Ya se encuentra inscrito en este evento." />
+                            }
+                            else if (Evento.AdmiteInscripciones)
+                            {
+                                <p class="texto-suave">Quedan @Evento.CuposDisponibles cupos disponibles.</p>
+                                <button type="button" class="boton boton-primario boton-ancho" disabled="@Procesando" @onclick="Inscribirse">
+                                    @(Procesando ? "Registrando…" : "Inscribirme en el evento")
+                                </button>
+                            }
+                            else
+                            {
+                                <Mensaje Tipo="aviso" Texto="@MensajeBloqueo" />
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+
+                    <a class="boton boton-contorno boton-ancho" href="/eventos">Volver al listado</a>
+                </div>
+            </aside>
+        </div>
+
+        <Mensaje Tipo="exito" Texto="@MensajeExito" />
+        <Mensaje Tipo="error" Texto="@MensajeError" />
+    }
+</section>
+
+@code {
+    /// <summary>Identificador del evento consultado.</summary>
+    [Parameter] public long Id { get; set; }
+
+    private EventoDetalleDto? Evento;
+    private bool Cargando = true;
+    private bool Procesando;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+
+    private string MensajeBloqueo => string.IsNullOrWhiteSpace(Evento?.MotivoBloqueoInscripcion)
+        ? "Este evento no admite inscripciones en este momento."
+        : Evento!.MotivoBloqueoInscripcion;
+
+    private string EstadoNumerico => Evento is null ? "0" : ((int)Evento.Estado).ToString();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        Cargando = true;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+
+        var resultado = await Catalogo.ObtenerDetalleAsync(Id);
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            Evento = resultado.Datos;
+        }
+        else
+        {
+            Evento = null;
+            MensajeError = resultado.Mensaje;
+        }
+
+        Cargando = false;
+    }
+
+    private async Task Inscribirse()
+    {
+        if (Evento is null || Procesando)
+        {
+            // Evita dobles envíos mientras la petición está en curso.
+            return;
+        }
+
+        Procesando = true;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+
+        try
+        {
+            var resultado = await Inscripciones.InscribirseAsync(Evento.Id);
+
+            if (!resultado.Exito)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            MensajeExito = $"Su inscripción al evento «{Evento.Nombre}» quedó registrada correctamente.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+
+        // Se vuelve a consultar el detalle para que el botón, los cupos y el estado
+        // reflejen el estado real almacenado en SQL Server.
+        var detalle = await Catalogo.ObtenerDetalleAsync(Id);
+        if (detalle.Exito && detalle.Datos is not null)
+        {
+            Evento = detalle.Datos;
+        }
+    }
+}

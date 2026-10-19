@@ -1,0 +1,36 @@
+@using FrontGestionEventos.Components.Layout
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                <LayoutView Layout="typeof(MainLayout)">
+                    <section class="contenedor seccion">
+                        <h1>Acceso restringido</h1>
+                        <p class="texto-suave">
+                            Esta sección requiere iniciar sesión con una cuenta habilitada.
+                        </p>
+                        <a class="boton boton-primario" href="/acceder">Ir al inicio de sesión</a>
+                    </section>
+                </LayoutView>
+            </NotAuthorized>
+            <Authorizing>
+                <div class="cargando" role="status" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>
+                    Verificando la sesión…
+                </div>
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Página no encontrada</PageTitle>
+        <LayoutView Layout="typeof(MainLayout)">
+            <section class="contenedor seccion">
+                <h1>Página no encontrada</h1>
+                <p class="texto-suave">La dirección solicitada no corresponde a ninguna pantalla del sistema.</p>
+                <a class="boton boton-primario" href="/">Volver al inicio</a>
+            </section>
+        </LayoutView>
+    </NotFound>
+</Router>

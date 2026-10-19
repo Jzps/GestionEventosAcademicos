@@ -1,0 +1,110 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/acceder"
+@attribute [AllowAnonymous]
+@inject ServicioAutenticacion Autenticacion
+@inject NavigationManager Navegacion
+
+<PageTitle>Iniciar sesión</PageTitle>
+
+<section class="contenedor seccion seccion-acceso">
+    <div class="tarjeta-acceso">
+        <h1>Iniciar sesión</h1>
+        <p class="texto-suave">Ingrese con las credenciales de su rol para continuar.</p>
+
+        <Mensaje Tipo="error" Texto="@MensajeError" />
+        <Mensaje Tipo="aviso" Texto="@MensajeAviso" />
+
+        <EditForm Model="Modelo" OnValidSubmit="IniciarSesion" FormName="formulario-acceso">
+            <DataAnnotationsValidator />
+
+            <div class="campo">
+                <label for="correo">Correo institucional</label>
+                <InputText id="correo" @bind-Value="Modelo.Email" class="control" autocomplete="username" />
+                <ValidationMessage For="() => Modelo.Email" />
+            </div>
+
+            <div class="campo">
+                <label for="contrasena">Contraseña</label>
+                <InputText id="contrasena" type="password" @bind-Value="Modelo.Contrasena" class="control" autocomplete="current-password" />
+                <ValidationMessage For="() => Modelo.Contrasena" />
+            </div>
+
+            <button type="submit" class="boton boton-primario boton-ancho" disabled="@Procesando">
+                @(Procesando ? "Verificando…" : "Entrar")
+            </button>
+        </EditForm>
+
+        <p class="enlace-secundario">
+            ¿Primera vez en el sistema? <a href="/registro">Crear cuenta de estudiante</a>
+        </p>
+
+        <div class="tarjeta-acceso-ayuda">
+            <h2>Cuentas de demostración</h2>
+            <p><strong>Estudiante:</strong> <code>estudiante@uni.edu.co</code> / <code>Estudiante2024!</code></p>
+            <p><strong>Responsable:</strong> <code>responsable@uni.edu.co</code> / <code>Responsable2024!</code></p>
+        </div>
+    </div>
+</section>
+
+@code {
+    private readonly ModeloAccesoFormulario Modelo = new();
+    private string MensajeError = string.Empty;
+    private string MensajeAviso = string.Empty;
+    private string DestinoSolicitado = string.Empty;
+    private bool Procesando;
+
+    protected override void OnInitialized()
+    {
+        var parametros = new Uri(Navegacion.Uri).Query;
+
+        if (parametros.Contains("error=ticket", StringComparison.OrdinalIgnoreCase))
+        {
+            MensajeError = "No fue posible activar la sesión. Inténtelo nuevamente.";
+        }
+        else if (parametros.Contains("salida=1", StringComparison.OrdinalIgnoreCase))
+        {
+            MensajeAviso = "Su sesión se cerró correctamente.";
+        }
+
+        // Si el servidor redirigió desde una ruta protegida, se vuelve a ella tras acceder.
+        var consulta = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(parametros);
+        var retorno = consulta.TryGetValue("ReturnUrl", out var valorRetorno) ? valorRetorno.ToString() : string.Empty;
+        if (!string.IsNullOrWhiteSpace(retorno) && retorno.StartsWith('/') && !retorno.StartsWith("//", StringComparison.Ordinal))
+        {
+            DestinoSolicitado = retorno;
+        }
+    }
+
+    private async Task IniciarSesion()
+    {
+        Procesando = true;
+        MensajeError = string.Empty;
+        MensajeAviso = string.Empty;
+
+        try
+        {
+            var resultado = await Autenticacion.IniciarSesionAsync(Modelo);
+
+            if (!resultado.Exito || resultado.Datos is null)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            var (usuario, ticket) = (resultado.Datos.Usuario, resultado.Datos.Ticket);
+            var destino = string.IsNullOrWhiteSpace(DestinoSolicitado)
+                ? (usuario.Rol == RolUsuario.Responsable ? "/responsable/eventos" : "/eventos")
+                : DestinoSolicitado;
+
+            // El navegador visita el endpoint de sesión: el servidor canjea el ticket por
+            // la cookie cifrada y redirige a la pantalla correspondiente al rol.
+            Navegacion.NavigateTo(
+                $"/api-sesion/establecer?ticket={Uri.EscapeDataString(ticket)}&destino={Uri.EscapeDataString(destino)}",
+                forceLoad: true);
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

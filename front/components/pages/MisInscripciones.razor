@@ -1,0 +1,202 @@
+@namespace FrontGestionEventos.Components.Pages
+@page "/mis-inscripciones"
+@attribute [Authorize(Roles = "Estudiante")]
+@inject ServicioInscripciones Inscripciones
+@inject NavigationManager Navegacion
+
+<PageTitle>Mis inscripciones</PageTitle>
+
+<section class="contenedor seccion">
+    <h1>Mis inscripciones</h1>
+    <p class="texto-suave">Consulte los eventos en los que se encuentra inscrito y el estado de cada inscripción.</p>
+
+    <Mensaje Tipo="exito" Texto="@MensajeExito" />
+    <Mensaje Tipo="error" Texto="@MensajeError" />
+
+    @if (Cargando)
+    {
+        <Cargando Texto="Consultando sus inscripciones…" />
+    }
+    else if (Lista.Count == 0)
+    {
+        <EstadoVacio Titulo="Todavía no tiene inscripciones"
+                     Descripcion="Consulte los eventos disponibles e inscribed a las actividades que le interesen."
+                     MostrarAccion="true"
+                     TextoAccion="Ver eventos disponibles"
+                     Destino="/eventos" />
+    }
+    else
+    {
+        <h2 class="subtitulo-seccion">Inscripciones activas</h2>
+        <p class="resultado-conteo">@Activas.Count @(Activas.Count == 1 ? "inscripción activa" : "inscripciones activas").</p>
+
+        <div class="tabla-contenedor">
+            <table class="tabla">
+                <caption class="solo-lectores">Inscripciones activas del estudiante</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Evento</th>
+                        <th scope="col">Fecha y hora</th>
+                        <th scope="col">Lugar</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var inscripcion in Activas)
+                    {
+                        <tr>
+                            <td data-label="Evento">
+                                <a href="@($"/eventos/{inscripcion.EventoId}")">@inscripcion.NombreEvento</a>
+                                <small class="celda-secundaria">Inscrita el @inscripcion.FechaHoraRegistro.ToString("dd/MM/yyyy")</small>
+                            </td>
+                            <td data-label="Fecha y hora">@inscripcion.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm")</td>
+                            <td data-label="Lugar">@inscripcion.Lugar</td>
+                            <td data-label="Estado">
+                                <span class="etiqueta etiqueta-activa">@inscripcion.EstadoDescripcion</span>
+                            </td>
+                            <td data-label="Acciones">
+                                @if (inscripcion.PermiteCancelar)
+                                {
+                                    <button type="button" class="boton boton-peligro boton-pequeno" disabled="@Cancelando" @onclick="() => Cancelar(inscripcion)">
+                                        @(Cancelando ? "Cancelando…" : "Cancelar inscripción")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="texto-ayuda" title="@inscripcion.MotivoBloqueoCancelacion">No se puede cancelar</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Canceladas.Count > 0)
+        {
+            <details class="historial">
+                <summary class="historial-resumen">
+                    Historial de cancelaciones (@Canceladas.Count @(Canceladas.Count == 1 ? "inscripción cancelada" : "inscripciones canceladas"))
+                </summary>
+
+                <p class="texto-suave texto-pequeno">
+                    Las inscripciones canceladas se conservan como historial. No impiden volver a inscribirse
+                    en el mismo evento mientras se cumplan las reglas de inscripción.
+                </p>
+
+                <div class="tabla-contenedor">
+                    <table class="tabla">
+                        <caption class="solo-lectores">Inscripciones canceladas del estudiante</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Evento</th>
+                                <th scope="col">Fecha del evento</th>
+                                <th scope="col">Cancelada el</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var inscripcion in Canceladas)
+                            {
+                                <tr>
+                                    <td data-label="Evento">
+                                        <a href="@($"/eventos/{inscripcion.EventoId}")">@inscripcion.NombreEvento</a>
+                                    </td>
+                                    <td data-label="Fecha del evento">@inscripcion.FechaHoraInicio.ToString("dd/MM/yyyy · HH:mm")</td>
+                                    <td data-label="Cancelada el">@(inscripcion.FechaHoraCancelacion?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td data-label="Estado">
+                                        <span class="etiqueta etiqueta-cancelada">@inscripcion.EstadoDescripcion</span>
+                                    </td>
+                                    <td data-label="Acciones">
+                                        <a class="boton boton-contorno boton-pequeno" href="@($"/eventos/{inscripcion.EventoId}")">
+                                            Volver al evento
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        }
+    }
+</section>
+
+@code {
+    private List<InscripcionDto> Lista = new();
+    private bool Cargando = true;
+    private bool Cancelando;
+    private string MensajeError = string.Empty;
+    private string MensajeExito = string.Empty;
+
+    /// <summary>Inscripciones vigentes del estudiante (RN-02 se refiere a las activas).</summary>
+    private List<InscripcionDto> Activas => Lista.Where(i => i.Estado == EstadoInscripcion.Activa).ToList();
+
+    /// <summary>Historial de inscripciones canceladas.</summary>
+    private List<InscripcionDto> Canceladas => Lista.Where(i => i.Estado == EstadoInscripcion.Cancelada).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // La carga de datos se realiza en el circuito interactivo: durante el
+        // prerenderizado se evita una llamada duplicada a la API.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        Cargando = true;
+        var resultado = await Inscripciones.MisInscripcionesAsync();
+
+        if (resultado.Exito && resultado.Datos is not null)
+        {
+            Lista = resultado.Datos;
+        }
+        else
+        {
+            Lista = new List<InscripcionDto>();
+            MensajeError = resultado.Mensaje;
+        }
+
+        Cargando = false;
+    }
+
+    private async Task Cancelar(InscripcionDto inscripcion)
+    {
+        if (Cancelando)
+        {
+            return;
+        }
+
+        Cancelando = true;
+        MensajeError = string.Empty;
+        MensajeExito = string.Empty;
+
+        try
+        {
+            var resultado = await Inscripciones.CancelarAsync(inscripcion.Id);
+
+            if (!resultado.Exito)
+            {
+                MensajeError = resultado.Mensaje;
+                return;
+            }
+
+            MensajeExito = $"La inscripción al evento «{inscripcion.NombreEvento}» fue cancelada.";
+        }
+        finally
+        {
+            Cancelando = false;
+        }
+
+        // La lista se recarga: la inscripción cancelada sale de la vista principal y
+        // pasa al historial, y los cupos del evento vuelven a estar disponibles.
+        await Cargar();
+    }
+}

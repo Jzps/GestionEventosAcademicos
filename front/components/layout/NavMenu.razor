@@ -1,0 +1,33 @@
+@namespace FrontGestionEventos.Components.Layout
+<nav class="navegacion" aria-label="Navegación principal">
+    <ul class="navegacion-lista">
+        <li>
+            <NavLink href="/" Match="NavLinkMatch.All">Inicio</NavLink>
+        </li>
+
+        <AuthorizeView Roles="Estudiante">
+            <Authorized>
+                <li>
+                    <NavLink href="/eventos">Eventos disponibles</NavLink>
+                </li>
+                <li>
+                    <NavLink href="/mis-inscripciones">Mis inscripciones</NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Responsable">
+            <Authorized>
+                <li>
+                    <NavLink href="/eventos">Eventos</NavLink>
+                </li>
+                <li>
+                    <NavLink href="/responsable/eventos">Mis eventos</NavLink>
+                </li>
+                <li>
+                    <NavLink href="/responsable/eventos/nuevo" class="enlace-destacado">Registrar evento</NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+    </ul>
+</nav>

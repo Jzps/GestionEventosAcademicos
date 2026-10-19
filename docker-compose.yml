@@ -1,0 +1,96 @@
+# Composición de contenedores del Sistema de Gestión de Eventos Académicos.
+# Arranque:  docker compose up -d --build
+#
+#   Frontend Blazor  ->  http://localhost:8080
+#   API ASP.NET Core ->  http://localhost:8081
+#   Swagger          ->  http://localhost:8081/swagger
+#   SQL Server       ->  solo acceso interno (servicio "sqlserver", puerto 1433)
+
+name: gestion-eventos-academicos
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ges-eventos-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-GestionEventos2024!}"
+      MSSQL_PID: "Developer"
+      MSSQL_AGENT_ENABLED: "false"
+    volumes:
+      - datos-sql:/var/opt/mssql
+    networks:
+      - eventos
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' > /dev/null 2>&1 || exit 1"
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api-gestion-academico
+    container_name: ges-eventos-api
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=GestionEventosAcademicos;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GestionEventos2024!};TrustServerCertificate=True;Encrypt=True;"
+      Jwt__Clave: "${JWT_CLAVE:-ClaveDeDemostracion-GestionEventosAcademicos-2024-SoloUsoLocal}"
+      Jwt__Emisor: "GestionEventosAcademicos"
+      Jwt__Audiencia: "GestionEventosAcademicos"
+      Jwt__DuracionMinutos: "180"
+    ports:
+      - "8081:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - eventos
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  front:
+    build:
+      context: ./front
+    container_name: ges-eventos-front
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      # Dirección interna de la API dentro de la red de Docker.
+      # "api" es el nombre del servicio definido en este archivo.
+      Api__UrlBase: "http://api:8080/"
+    ports:
+      - "8080:8080"
+    volumes:
+      # Las claves de Data Protection permiten que la cookie de sesión siga siendo
+      # válida aunque se recree el contenedor.
+      - claves-front:/root/.aspnet/DataProtection-Keys
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - eventos
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  datos-sql:
+  claves-front:
+
+networks:
+  eventos:
+    driver: bridge
